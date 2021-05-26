@@ -15,6 +15,8 @@ class Tile(pyg.sprite.Sprite):
                XXXX
 
     Minimap label
+
+    A class to represent one square on the game board.
     """
     def __init__(self, window, color, palette, pos):
         super().__init__()
@@ -55,6 +57,7 @@ class Tile(pyg.sprite.Sprite):
         self.image.fill(self.color)
 
     def render(self):
+        """Render the tile, but only if it is onscreen."""
         if self.rect.colliderect(window_rect):
             self.window.blit(self.image, self.rect)
 
@@ -69,6 +72,9 @@ class Board():
          XXXXXXXXXXXX
 
     Minimap label
+
+    A management class to keep track of the board state, the tiles, and
+    the pieces.  Camera management (zooming) is done here as well.
     """
     def __init__(self, window):
         self.window = window
@@ -76,7 +82,8 @@ class Board():
         self.tiles = pyg.sprite.Group()
         self.pieces = pyg.sprite.Group()
 
-    def generate(self, size=(50, 50), palette='default'):
+    def generate(self, size=(50, 50), topleft=(0, 0), palette='standard'):
+        """Create a square region of tiles in alternating colors."""
         for y in range(size[1]):
             for x in range(size[0]):
                 if x % 2 == y % 2:
@@ -84,10 +91,14 @@ class Board():
                 else:
                     color = 'black'
 
-                tile = Tile(self.window, color, palette, (x, y))
+                tile = Tile(self.window, color, palette, (x+topleft[0], y+topleft[1]))
                 self.tiles.add(tile)
 
     def zoom(self, amount):
+        """
+        Make all tiles and pieces bigger, but within the boundries of
+        10px and 100px.
+        """
         zoomables = self.tiles.sprites() + self.pieces.sprites()
         for things in zoomables:
             if amount < 0:
@@ -102,6 +113,10 @@ class Board():
                     things.size = 100
 
     def render(self):
+        """
+        Render all tiles and all pieces.  The check to see if the sprites
+        are onscreen is done by the sprites themselves.
+        """
         for tile in self.tiles:
             tile.render()
         for piece in self.pieces:
@@ -120,6 +135,8 @@ class Piece(pyg.sprite.Sprite):
              XXXX
 
         Minimap label
+
+        A class to represent a playing piece.
         """
         super().__init__()
         self.window = window
@@ -170,6 +187,12 @@ class Piece(pyg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.topleft = self.scaled_pos
 
+    def open_menu(self):
+        """
+        Called when the piece is clicked.  Used to open any menus that
+        are related to the piece and also to display the available moves.
+        """
+
     def update(self, camera_pos):
         """
         Update any data related to this piece.  Called every tick.
@@ -187,11 +210,13 @@ class Piece(pyg.sprite.Sprite):
         self.image = pyg.transform.smoothscale(self.base_image, (self.size, self.size)).convert_alpha()
 
     def render(self):
+        """Render the tile, but only if it is onscreen."""
         if self.rect.colliderect(window_rect):
             self.window.blit(self.image, self.rect)
 
 
 def terminate():
+    """Cleanly exit the program."""
     pyg.quit()
     raise SystemExit()
 
@@ -218,8 +243,9 @@ def main():
 
     camera_pos = [0, 0]
 
-    p1 = Piece(window, (1, 1), 'queen', 'white', 'standard')
-    board.pieces.add(p1)
+    p1 = Piece(window, (10, 10), 'queen', 'white', 'standard')
+    p2 = Piece(window, (20, 12), 'knight', 'black', 'standard')
+    board.pieces.add(p1, p2)
 
     clock = pyg.time.Clock()
 
@@ -237,12 +263,18 @@ def main():
                         terminate()
                     elif event.key == pyg.K_SPACE:
                         ...
+                elif event.type == pyg.MOUSEBUTTONUP:
+                    for piece in board.pieces:
+                        if pieces.rect.collidepoint(event.pos):
+                            piece.open_menu()
+                            break
                 # Zoom in and out using the scroll wheel
                 elif event.type == pyg.MOUSEWHEEL:
                     board.zoom(event.y)
                 # Drag the board around using the mouse pointer
                 elif event.type == pyg.MOUSEMOTION:
                     if event.buttons[0]:
+                        # Using event.rel is easy but is a bit laggy
                         camera_pos[0] += event.rel[0]
                         camera_pos[1] += event.rel[1]
 
@@ -268,7 +300,7 @@ def main():
                     elif event.key == pyg.K_BACKQUOTE:
                         terminate()
 
-            window.fill((100, 100, 200))
+            window.fill((0, 0, 0))
 
             pyg.display.flip()
             clock.tick(30)
