@@ -3,10 +3,6 @@ import random
 import math
 import os
 
-os.environ['SDL_VIDEO_CENTERED'] = '1'
-
-FPS = 30
-
 
 class Tile(pyg.sprite.Sprite):
     """
@@ -20,7 +16,7 @@ class Tile(pyg.sprite.Sprite):
 
     Minimap label
     """
-    def __init__(self, window, color, palette, pos, size):
+    def __init__(self, window, color, palette, pos):
         super().__init__()
         self.window = window
 
@@ -31,7 +27,7 @@ class Tile(pyg.sprite.Sprite):
 
         self.palette = palette
 
-        self.size = size
+        self.size = 20
         self.true_pos = pos
         self.scaled_pos = self.true_pos
 
@@ -40,18 +36,27 @@ class Tile(pyg.sprite.Sprite):
         self.image.fill(self.color)
         self.rect = self.image.get_rect()
         self.rect.topleft = self.scaled_pos
-        self.draw_rect = self.rect
 
-    def update(self):
+    def update(self, camera_pos):
+        """
+        Update any data related to this tile.  Called every tick.
+
+        1) set position according to size and camera_pos
+        2) update image accordingly
+        """
         self.scaled_pos = (self.true_pos[0]*self.size,
                            self.true_pos[1]*self.size)
         self.rect.topleft = self.scaled_pos
+
+        self.rect.x += camera_pos[0]
+        self.rect.y += camera_pos[1]
+
         self.image = pyg.Surface((self.size, self.size)).convert()
         self.image.fill(self.color)
 
     def render(self):
-        if self.draw_rect.colliderect(window_rect):
-            self.window.blit(self.image, self.draw_rect)
+        if self.rect.colliderect(window_rect):
+            self.window.blit(self.image, self.rect)
 
 class Board():
     """
@@ -69,8 +74,9 @@ class Board():
         self.window = window
 
         self.tiles = pyg.sprite.Group()
+        self.pieces = pyg.sprite.Group()
 
-    def generate(self, size=(100, 100), palette='default'):
+    def generate(self, size=(50, 50), palette='default'):
         for y in range(size[1]):
             for x in range(size[0]):
                 if x % 2 == y % 2:
@@ -78,71 +84,111 @@ class Board():
                 else:
                     color = 'black'
 
-                tile = Tile(self.window, color, palette, (x, y), 60)
+                tile = Tile(self.window, color, palette, (x, y))
                 self.tiles.add(tile)
 
     def zoom(self, amount):
-        for tile in self.tiles:
+        zoomables = self.tiles.sprites() + self.pieces.sprites()
+        for things in zoomables:
             if amount < 0:
-                if tile.size > 10:
-                    tile.size -= 7
+                if things.size > 10:
+                    things.size -= 7
                 else:
-                    tile.size = 10
+                    things.size = 10
             else:
-                if tile.size < 100:
-                    tile.size += 7
+                if things.size < 100:
+                    things.size += 7
                 else:
-                    tile.size = 100
-    def set_tile_size(self, size):
-        for tile in self.tiles:
-            tile.size = size
+                    things.size = 100
 
     def render(self):
         for tile in self.tiles:
             tile.render()
+        for piece in self.pieces:
+            piece.render()
 
 
-class Camera():
-    """
-            XXXXXXXXX
-         XXXX       XXXX
-         XXXX
-         XXXX
-         XXXX
-         XXXX       XXXX
-            XXXXXXXXX
+class Piece(pyg.sprite.Sprite):
+    def __init__(self, window, pos, type, color, palette):
+        """
+             XXXXXXXXXXXX
+             XXXX       XXXX
+             XXXX       XXXX
+             XXXXXXXXXXXX
+             XXXX
+             XXXX
+             XXXX
 
-    Minimap label
-    """
-    def __init__(self):
-        self.rect = pyg.rect.Rect(0, 0, WIDTH, HEIGHT)
+        Minimap label
+        """
+        super().__init__()
+        self.window = window
 
-    def get_world_pos(self, pos):
-        return (pos[0] - self.rect.left, pos[1] - self.rect.top)
+        if color == 'black':
+            self.color = (0, 0, 0)
+        else:
+            self.color = (250, 250, 250)
 
-    def apply_lens(self, player, world, world_decor):
-        player.draw_rect = player.rect.move(self.rect.topleft)
-        world_decor.bg_draw_rect = world_decor.bg_rect.move(self.rect.topleft)
+        self.type = type
 
-        everything = (world.walls.sprites() +
-                      world.statics.sprites() +
-                      world.pickups.sprites() +
-                      world.enemies.sprites() +
-                      world.bullets.sprites())
+        self.size = 20 # Must be the same size as the initial size of the tiles
+        self.true_pos = pos
+        self.scaled_pos = self.true_pos
 
-        for sprite in everything:
-            sprite.draw_rect = sprite.rect.move(self.rect.topleft)
+        self.spritesheet = pyg.image.load(get_path('assets', 'imgs', 'pieces', f'{palette}.png'))
+        self.sheet_pos = [None, None]
 
-    def follow(self, sprite):
-        pos = sprite.rect.center
+        # Get spritesheet coords based on the type of piece
+        if type == 'king':
+            self.sheet_pos[0] = (0, 330)
+        elif type == 'queen':
+            self.sheet_pos[0] = (331, 695)
+        elif type == 'bishop':
+            self.sheet_pos[0] = (696, 1024)
+        elif type == 'knight':
+            self.sheet_pos[0] = (1025, 1343)
+        elif type == 'rook':
+            self.sheet_pos[0] = (1344, 1615)
+        elif type == 'pawn':
+            self.sheet_pos[0] = (1616, 1848)
+        if color == 'white':
+            self.sheet_pos[1] = (0, 334)
+        elif color == 'black':
+            self.sheet_pos[1] = (335, 675)
+        self.sheet_rect = pyg.rect.Rect(self.sheet_pos[0][0],
+                                        self.sheet_pos[1][0],
+                                        self.sheet_pos[0][1] - self.sheet_pos[0][0],
+                                        self.sheet_pos[1][1] - self.sheet_pos[1][0])
 
-         # Subtract half of the screen to center the sprite
-        top = pos[0] - WIDTH//2
-        left = pos[1] - HEIGHT//2
-        width = self.rect.width
-        height = self.rect.height
+        # Get the correct size image based on the piece
+        self.base_image = pyg.Surface(self.sheet_rect.size).convert_alpha()
+        self.base_image.fill((0, 0, 0, 0))
+        self.base_image.blit(self.spritesheet, (0, 0), self.sheet_rect)
 
-        self.rect = pyg.rect.Rect(-top, -left, width, height)
+        self.image = pyg.transform.smoothscale(self.base_image, (self.size, self.size)).convert_alpha()
+
+        self.rect = self.image.get_rect()
+        self.rect.topleft = self.scaled_pos
+
+    def update(self, camera_pos):
+        """
+        Update any data related to this piece.  Called every tick.
+
+        1) set position according to size and camera_pos
+        2) update image accordingly
+        """
+        self.scaled_pos = (self.true_pos[0]*self.size,
+                           self.true_pos[1]*self.size)
+        self.rect.topleft = self.scaled_pos
+
+        self.rect.x += camera_pos[0]
+        self.rect.y += camera_pos[1]
+
+        self.image = pyg.transform.smoothscale(self.base_image, (self.size, self.size)).convert_alpha()
+
+    def render(self):
+        if self.rect.colliderect(window_rect):
+            self.window.blit(self.image, self.rect)
 
 
 def terminate():
@@ -152,12 +198,7 @@ def terminate():
 def get_path(*path):
     """Returns the full file path of a file."""
     dirname = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(dirname, path)
-
-def play_sound(sound):
-    se_channel = pyg.mixer.find_channel()
-
-    se_channel.play(sound)
+    return os.path.join(dirname, *path)
 
 def main():
     """
@@ -172,12 +213,13 @@ def main():
     Minimap label
     """
 
-     # Custom Events
-    #custom_event = pyg.USEREVENT + 1
-    #pyg.time.set_timer(custom_event, 0)
-
     board = Board(window)
     board.generate()
+
+    camera_pos = [0, 0]
+
+    p1 = Piece(window, (1, 1), 'queen', 'white', 'standard')
+    board.pieces.add(p1)
 
     clock = pyg.time.Clock()
 
@@ -195,20 +237,26 @@ def main():
                         terminate()
                     elif event.key == pyg.K_SPACE:
                         ...
+                # Zoom in and out using the scroll wheel
                 elif event.type == pyg.MOUSEWHEEL:
                     board.zoom(event.y)
-
-            #camera.follow(player)
-            #camera.apply_lens(player, world, world_decor)
+                # Drag the board around using the mouse pointer
+                elif event.type == pyg.MOUSEMOTION:
+                    if event.buttons[0]:
+                        camera_pos[0] += event.rel[0]
+                        camera_pos[1] += event.rel[1]
 
             window.fill((50, 50, 200))
 
             for tile in board.tiles:
-                tile.update()
+                tile.update(camera_pos)
+            for piece in board.pieces:
+                piece.update(camera_pos)
+
             board.render()
 
             pyg.display.flip()
-            clock.tick(FPS)
+            clock.tick(30)
 
         else: # If paused
             for event in pyg.event.get():
@@ -223,8 +271,7 @@ def main():
             window.fill((100, 100, 200))
 
             pyg.display.flip()
-
-            clock.tick(FPS)
+            clock.tick(30)
 
 
 if __name__ == '__main__':
@@ -233,10 +280,7 @@ if __name__ == '__main__':
     pyg.init()
     pyg.display.set_caption("ChessRPG")
     window = pyg.display.set_mode(flags=pyg.HWSURFACE | pyg.FULLSCREEN | pyg.DOUBLEBUF)
-    window_rect = window.get_rect()
+    window_rect = window.get_rect().inflate(180, 180) # 180 padding so rendering is nice
     WIDTH, HEIGHT = pyg.display.get_window_size()
-
-    # Init camera outside of main() so we can access it anywhere
-    camera = Camera()
 
     main()
