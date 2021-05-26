@@ -1,3 +1,3 @@
 # ChessRPG
 
-An attempt at an open world RPG-style game based upon the classic game of chess.
+An open world game based upon the classic game of chess.
