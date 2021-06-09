@@ -84,8 +84,8 @@ class Board():
 
     def generate(self, size=(50, 50), topleft=(0, 0), palette='standard'):
         """Create a square region of tiles in alternating colors."""
-        for y in range(size[1]):
-            for x in range(size[0]):
+        for y in range(-10, size[1]):
+            for x in range(-10, size[0]):
                 if x % 2 == y % 2:
                     color = 'white'
                 else:
@@ -96,21 +96,16 @@ class Board():
 
     def zoom(self, amount):
         """
-        Make all tiles and pieces bigger, but within the boundries of
+        Make all tiles and pieces bigger/ smaller, but within the boundries of
         10px and 100px.
         """
         zoomables = self.tiles.sprites() + self.pieces.sprites()
-        for things in zoomables:
-            if amount < 0:
-                if things.size > 10:
-                    things.size -= 7
-                else:
-                    things.size = 10
-            else:
-                if things.size < 100:
-                    things.size += 7
-                else:
-                    things.size = 100
+        for item in zoomables:
+            item.size += 7 * amount
+            if item.size < 10:
+                item.size = 10
+            elif item.size > 100:
+                item.size = 100
 
     def render(self):
         """
@@ -156,17 +151,17 @@ class Piece(pyg.sprite.Sprite):
         self.sheet_pos = [None, None]
 
         # Get spritesheet coords based on the type of piece
-        if type == 'king':
+        if self.type == 'king':
             self.sheet_pos[0] = (0, 330)
-        elif type == 'queen':
+        elif self.type == 'queen':
             self.sheet_pos[0] = (331, 695)
-        elif type == 'bishop':
+        elif self.type == 'bishop':
             self.sheet_pos[0] = (696, 1024)
-        elif type == 'knight':
+        elif self.type == 'knight':
             self.sheet_pos[0] = (1025, 1343)
-        elif type == 'rook':
+        elif self.type == 'rook':
             self.sheet_pos[0] = (1344, 1615)
-        elif type == 'pawn':
+        elif self.type == 'pawn':
             self.sheet_pos[0] = (1616, 1848)
         if color == 'white':
             self.sheet_pos[1] = (0, 334)
@@ -187,11 +182,29 @@ class Piece(pyg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.topleft = self.scaled_pos
 
+        self.move_markers = []
+
     def open_menu(self):
         """
         Called when the piece is clicked.  Used to open any menus that
         are related to the piece and also to display the available moves.
         """
+        if self.type == 'king':
+            self.move_markers = []
+        elif self.type == 'queen':
+            self.move_markers = []
+        elif self.type == 'bishop':
+            self.move_markers = []
+        elif self.type == 'knight':
+            self.move_markers = [(2, 1), (2, -1), (1, -2), (-1, -2),
+                                 (-2, -1), (-2, 1), (-1, 2), (1, 2)]
+        elif self.type == 'rook':
+            self.move_markers = []
+        elif self.type == 'pawn':
+            self.move_markers = []
+
+    def close_menu(self):
+        self.move_markers = []
 
     def update(self, camera_pos):
         """
@@ -199,6 +212,7 @@ class Piece(pyg.sprite.Sprite):
 
         1) set position according to size and camera_pos
         2) update image accordingly
+        3) calculate positions of all move markers
         """
         self.scaled_pos = (self.true_pos[0]*self.size,
                            self.true_pos[1]*self.size)
@@ -213,6 +227,11 @@ class Piece(pyg.sprite.Sprite):
         """Render the tile, but only if it is onscreen."""
         if self.rect.colliderect(window_rect):
             self.window.blit(self.image, self.rect)
+
+            for marker in self.move_markers:
+                pos = (marker[0]*self.size + self.rect.centerx,
+                       marker[1]*self.size + self.rect.centery)
+                pyg.draw.circle(self.window, (0, 0, 200), pos, self.size//2)
 
 
 def terminate():
@@ -265,12 +284,13 @@ def main():
                         ...
                 elif event.type == pyg.MOUSEBUTTONUP:
                     for piece in board.pieces:
-                        if pieces.rect.collidepoint(event.pos):
+                        if piece.rect.collidepoint(event.pos):
                             piece.open_menu()
                             break
                 # Zoom in and out using the scroll wheel
                 elif event.type == pyg.MOUSEWHEEL:
                     board.zoom(event.y)
+
                 # Drag the board around using the mouse pointer
                 elif event.type == pyg.MOUSEMOTION:
                     if event.buttons[0]:
